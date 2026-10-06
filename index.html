@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SQL JOIN — Küme Animasyonu</title>
+<style>
+  :root{
+    --bg:#0a0f18;
+    --panel:#121a25;
+    --panel-2:#0e1620;
+    --cizgi:#1f2b3a;
+    --cizgi-2:#2a3a4d;
+    --metin:#e6edf3;
+    --soluk:#8896a6;
+    --sol:#60a5fa;
+    --sag:#c084fc;
+    --kesisim:#34d399;
+    --null:#64748b;
+    --vurgu:#facc15;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;min-height:100vh;
+    background:radial-gradient(1100px 700px at 50% -10%, #172230, var(--bg));
+    color:var(--metin);
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  .app{
+    max-width:960px;
+    margin:0 auto;
+    padding:22px 16px 40px;
+  }
+
+  /* ---------- Başlık ---------- */
+  header{text-align:center;margin-bottom:14px;}
+  h1{font-size:21px;margin:0 0 6px;font-weight:600;letter-spacing:.2px;}
+  h1 small{color:var(--kesisim);font-weight:500;font-size:13px;margin-left:6px;}
+  .aciklama{
+    color:var(--soluk);font-size:13px;line-height:1.6;
+    margin:0 auto;max-width:600px;
+  }
+  .aciklama b{color:var(--metin);font-weight:600;}
+
+  /* ---------- JOIN seçici ---------- */
+  .secici{
+    display:flex;gap:7px;flex-wrap:wrap;justify-content:center;
+    margin:16px 0 18px;
+  }
+  .secici button{
+    font:inherit;font-size:12px;font-weight:600;letter-spacing:.4px;
+    padding:8px 13px;
+    border-radius:8px;
+    border:1px solid var(--cizgi);
+    background:var(--panel);
+    color:var(--soluk);
+    cursor:pointer;
+    transition:all .16s ease;
+  }
+  .secici button:hover{color:var(--metin);border-color:#3d5170;}
+  .secici button.aktif{
+    background:linear-gradient(180deg,#1f7a5c,#166348);
+    color:#fff;border-color:#2fbd8c;
+    box-shadow:0 0 0 3px rgba(52,211,153,.14);
+  }
+
+  /* ---------- Sahne ---------- */
+  .sahne{
+    position:relative;
+    width:100%;
+    aspect-ratio:900 / 360;
+    margin:0 auto 20px;
+  }
+  .venn-svg{
+    position:absolute;inset:0;
+    width:100%;height:100%;
+    overflow:visible;
+  }
+  .venn-svg .daire{
+    fill-opacity:.06;
+    stroke-width:1.5;
+    transition:stroke-opacity .35s, fill-opacity .35s;
+  }
+  .venn-svg .daire.sol{fill:var(--sol);stroke:var(--sol);stroke-opacity:.45;}
+  .venn-svg .daire.sag{fill:var(--sag);stroke:var(--sag);stroke-opacity:.45;}
+  .venn-svg .daire.parlak{stroke-opacity:.85;fill-opacity:.11;}
+
+  .etiket{
+    position:absolute;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--soluk);
+    font-weight:600;
+    pointer-events:none;
+    top:6%;
+  }
+  .etiket.sol{color:var(--sol);left:6%;}
+  .etiket.sag{color:var(--sag);right:6%;}
+  .etiket.kesisim{
+    color:var(--kesisim);
+    left:50%;transform:translateX(-50%);
+    background:rgba(52,211,153,.10);
+    padding:2px 9px;border-radius:20px;
+    font-size:10px;
+    border:1px solid rgba(52,211,153,.25);
+    top:6%;
+  }
+
+  /* ---------- Venn içindeki emojiler ---------- */
+  .emoji{
+    position:absolute;
+    font-size:38px;
+    line-height:1;
+    user-select:none;
+    pointer-events:none;
+    transform:translate(-50%,-50%);
+    transition:opacity .35s ease, filter .35s ease;
+    z-index:2;
+    will-change:transform,opacity;
+  }
+  .emoji.bagli{z-index:3;filter:drop-shadow(0 0 10px rgba(52,211,153,.35));}
+  .emoji.soluk{opacity:.18;filter:grayscale(.85);}
+  .emoji.nabiz{animation:emojiNabiz .55s cubic-bezier(.4,1.6,.6,1);}
+  @keyframes emojiNabiz{
+    0%{transform:translate(-50%,-50%) scale(1);}
+    35%{transform:translate(-50%,-50%) scale(1.55);filter:brightness(1.4);}
+    100%{transform:translate(-50%,-50%) scale(1);}
+  }
+
+  /* ---------- Uçan klon ---------- */
+  .ucan{
+    position:fixed;
+    font-size:34px;
+    line-height:1;
+    z-index:100;
+    pointer-events:none;
+    transform-origin:center center;
+    filter:drop-shadow(0 6px 12px rgba(0,0,0,.55));
+    will-change:transform,opacity;
+  }
+
+  /* ---------- Sonuç alanı ---------- */
+  .sonuc-kart{
+    background:var(--panel);
+    border:1px solid var(--cizgi);
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 15px 45px -25px rgba(0,0,0,.8);
+  }
+  .sonuc-baslik{
+    padding:11px 16px;
+    display:flex;justify-content:space-between;align-items:center;
+    gap:12px;
+    background:var(--panel-2);
+    border-bottom:1px solid var(--cizgi);
+  }
+  .sonuc-baslik h2{
+    margin:0;font-size:11.5px;font-weight:600;
+    letter-spacing:.7px;text-transform:uppercase;
+    color:var(--kesisim);
+  }
+  .sayac{
+    font-size:12px;color:var(--soluk);
+    font-variant-numeric:tabular-nums;
+  }
+  .sayac b{color:var(--metin);font-weight:600;}
+
+  .sonuc-alan{
+    min-height:120px;
+    padding:16px;
+    display:flex;flex-wrap:wrap;gap:9px;
+    align-content:flex-start;
+    position:relative;
+  }
+  .bos-mesaj{
+    position:absolute;inset:0;
+    display:grid;place-items:center;
+    color:var(--soluk);font-size:13px;font-style:italic;
+    pointer-events:none;
+  }
+
+  /* ---------- Eşleşme kartı ---------- */
+  .eslesme{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:5px 9px 5px 7px;
+    background:#0b121a;
+    border:1px solid var(--cizgi);
+    border-radius:10px;
+    font-size:22px;
+    line-height:1;
+    animation:kartGel .35s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  @keyframes kartGel{
+    from{opacity:0;transform:scale(.7);}
+    to{opacity:1;transform:scale(1);}
+  }
+  .eslesme.eslesmez{
+    border-color:#2a3a4d;
+    background:#0a1017;
+    border-style:dashed;
+  }
+  .eslesme .bag{
+    font-size:11px;color:var(--soluk);
+    padding:0 1px;
+    user-select:none;
+  }
+  .eslesme .bos-kutu{
+    width:26px;height:26px;
+    display:grid;place-items:center;
+    border:1.5px dashed var(--null);
+    border-radius:6px;
+    font-size:9px;
+    color:var(--null);
+    font-weight:700;
+    letter-spacing:.02em;
+    font-family:ui-monospace,Menlo,monospace;
+  }
+  .eslesme .hedef-emoji{
+    opacity:0;
+    transition:opacity .18s ease;
+  }
+  .eslesme .hedef-emoji.gorunur{opacity:1;}
+
+  /* ---------- Alt kontrol ---------- */
+  .alt-satir{
+    display:flex;justify-content:center;align-items:center;
+    gap:16px;margin-top:14px;flex-wrap:wrap;
+  }
+  .hiz-secici{
+    display:flex;gap:5px;align-items:center;
+    color:var(--soluk);font-size:12px;
+  }
+  .hiz-secici button{
+    font:inherit;font-size:11.5px;
+    padding:5px 10px;
+    background:transparent;
+    color:var(--soluk);
+    border:1px solid var(--cizgi);
+    border-radius:6px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .hiz-secici button:hover{color:var(--metin);}
+  .hiz-secici button.aktif{
+    color:#2fbd8c;
+    border-color:#2fbd8c;
+    background:rgba(47,189,140,.08);
+  }
+
+  /* ---------- Durum çubuğu ---------- */
+  .durum{
+    position:fixed;
+    bottom:16px;left:50%;
+    transform:translateX(-50%);
+    padding:9px 16px;
+    border-radius:20px;
+    background:rgba(14,22,32,.95);
+    border:1px solid var(--cizgi);
+    font-size:12.5px;
+    color:var(--soluk);
+    box-shadow:0 12px 32px -12px rgba(0,0,0,.7);
+    backdrop-filter:blur(10px);
+    transition:opacity .28s,transform .28s;
+    z-index:200;
+    pointer-events:none;
+    max-width:92vw;
+    text-align:center;
+    line-height:1.5;
+  }
+  .durum.gizli{opacity:0;transform:translate(-50%,10px);}
+  .durum b{color:var(--metin);font-weight:600;}
+
+  /* ---------- Küçük ekran ---------- */
+  @media (max-width:600px){
+    .app{padding:14px 12px 30px;}
+    .emoji{font-size:30px;}
+    .ucan{font-size:26px;}
+    h1{font-size:18px;}
+    .aciklama{font-size:12.5px;}
+    .secici button{padding:7px 10px;font-size:11px;}
+    .sonuc-alan{padding:12px;gap:7px;}
+    .eslesme{font-size:19px;padding:4px 7px 4px 5px;}
+    .eslesme .bos-kutu{width:22px;height:22px;font-size:8px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{
+      animation-duration:.01ms !important;
+      transition-duration:.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>SQL JOIN <small>küme mantığı</small></h1>
+    <p class="aciklama">
+      İki <b>küme</b>: solda 🍎, sağda 🍑. Ortadaki <b>kesişim</b>,
+      iki kümede de bulunanlar. Bir JOIN türü seç ve emojilerin
+      sonuç alanına nasıl <b>çekildiğini</b> izle.
+    </p>
+  </header>
+
+  <div class="secici" id="secici">
+    <button data-join="INNER" class="aktif">INNER JOIN</button>
+    <button data-join="LEFT">LEFT JOIN</button>
+    <button data-join="RIGHT">RIGHT JOIN</button>
+    <button data-join="FULL">FULL OUTER JOIN</button>
+    <button data-join="CROSS">CROSS JOIN</button>
+  </div>
+
+  <div class="sahne" id="sahne">
+    <svg class="venn-svg" viewBox="0 0 900 360" preserveAspectRatio="xMidYMid meet">
+      <circle class="daire sol" cx="340" cy="180" r="145" id="daire-sol"/>
+      <circle class="daire sag" cx="560" cy="180" r="145" id="daire-sag"/>
+    </svg>
+    <div class="etiket sol">Sol küme</div>
+    <div class="etiket kesisim">∩ Kesişim</div>
+    <div class="etiket sag">Sağ küme</div>
+    <!-- Emojiler JS ile eklenecek -->
+  </div>
+
+  <div class="sonuc-kart">
+    <div class="sonuc-baslik">
+      <h2>Sonuç Kümesi</h2>
+      <span class="sayac" id="sayac"><b>0</b> eşleşme</span>
+    </div>
+    <div class="sonuc-alan" id="sonuc">
+      <div class="bos-mesaj" id="bos-mesaj">Yukarıdan bir JOIN türü seç</div>
+    </div>
+  </div>
+
+  <div class="alt-satir">
+    <div class="hiz-secici" id="hiz">
+      <span>Hız:</span>
+      <button data-hiz="1.6">Yavaş</button>
+      <button data-hiz="1" class="aktif">Normal</button>
+      <button data-hiz="0.55">Hızlı</button>
+    </div>
+  </div>
+</div>
+
+<div class="durum gizli" id="durum"></div>
+
+<script>
+/* ============================================================
+   1) KÜME VERİSİ (emoji bazlı)
+      zone: 'left'  → yalnız sol kümede
+            'right' → yalnız sağ kümede
+            'both'  → kesişimde
+   ============================================================ */
+const SOL_KUME = [
+  { id:'L1', emoji:'🍎', zone:'left',  x:230, y:140 },
+  { id:'L2', emoji:'🍌', zone:'left',  x:230, y:230 },
+  { id:'L3', emoji:'🍇', zone:'both',  x:415, y:140 },
+  { id:'L4', emoji:'🍓', zone:'both',  x:415, y:230 },
+];
+const SAG_KUME = [
+  { id:'R1', emoji:'🍇', zone:'both',  x:485, y:140 },
+  { id:'R2', emoji:'🍓', zone:'both',  x:485, y:230 },
+  { id:'R3', emoji:'🍑', zone:'right', x:670, y:140 },
+  { id:'R4', emoji:'🍒', zone:'right', x:670, y:230 },
+];
+
+/* ============================================================
+   2) EŞLEŞME MANTIĞI
+   ============================================================ */
+function eslesmeleriUret(tip){
+  const liste = [];
+  const solEslenen = new Set();
+  const sagEslenen = new Set();
+
+  // Doğal eşleşmeler (aynı emoji iki kümede de var)
+  for (const l of SOL_KUME){
+    for (const r of SAG_KUME){
+      if (l.emoji === r.emoji && l.zone === 'both' && r.zone === 'both'){
+        liste.push({ sol:l, sag:r });
+        solEslenen.add(l.id);
+        sagEslenen.add(r.id);
+      }
+    }
+  }
+
+  if (tip === 'CROSS'){
+    // Her sol × her sağ
+    const capraz = [];
+    for (const l of SOL_KUME){
+      for (const r of SAG_KUME){
+        capraz.push({ sol:l, sag:r, cross:true });
+      }
+    }
+    return capraz;
+  }
+
+  // LEFT / FULL: sol tarafta eşleşmeyenler
+  if (tip === 'LEFT' || tip === 'FULL'){
+    for (const l of SOL_KUME){
+      if (!solEslenen.has(l.id)) liste.push({ sol:l, sag:null });
+    }
+  }
+  // RIGHT / FULL: sağ tarafta eşleşmeyenler
+  if (tip === 'RIGHT' || tip === 'FULL'){
+    for (const r of SAG_KUME){
+      if (!sagEslenen.has(r.id)) liste.push({ sol:null, sag:r });
+    }
+  }
+  return liste;
+}
+
+/* ============================================================
+   3) DURUM & REFERANSLAR
+   ============================================================ */
+const sahne      = document.getElementById('sahne');
+const sonucAlan  = document.getElementById('sonuc');
+const sayacEl    = document.getElementById('sayac');
+const bosMesaj   = document.getElementById('bos-mesaj');
+const durumEl    = document.getElementById('durum');
+const secici     = document.getElementById('secici');
+const hizSecici  = document.getElementById('hiz');
+const daireSol   = document.getElementById('daire-sol');
+const daireSag   = document.getElementById('daire-sag');
+
+const emojiEl = Object.create(null);   // id → element
+let HIZ = 1;
+let calisiyor = false;
+let iptal = false;
+const aktifKlonlar = new Set();
+
+/* ============================================================
+   4) YARDIMCILAR
+   ============================================================ */
+const bekle = ms => new Promise(r => setTimeout(r, ms));
+const ayarliBekle = ms => bekle(ms / HIZ);
+
+function durumYaz(html){
+  durumEl.innerHTML = html;
+  durumEl.classList.remove('gizli');
+}
+function durumGizle(){
+  durumEl.classList.add('gizli');
+}
+
+function nabiz(id){
+  const el = emojiEl[id];
+  if (!el) return;
+  el.classList.remove('nabiz');
+  void el.offsetWidth;   // reflow
+  el.classList.add('nabiz');
+  setTimeout(() => el && el.classList.remove('nabiz'), 620);
+}
+
+/* ============================================================
+   5) EMOJİLERİ SAHNEYE YERLEŞTİR
+   Sahne viewBox: 900 × 360. Yüzde konumla → responsive.
+   ============================================================ */
+function emojileriYerlestir(){
+  sahne.querySelectorAll('.emoji').forEach(e => e.remove());
+  for (const k of Object.keys(emojiEl)) delete emojiEl[k];
+
+  const hepsi = [...SOL_KUME, ...SAG_KUME];
+  for (const k of hepsi){
+    const el = document.createElement('div');
+    el.className = 'emoji' + (k.zone === 'both' ? ' bagli' : '');
+    el.textContent = k.emoji;
+    el.dataset.id = k.id;
+    el.style.left = (k.x / 900 * 100) + '%';
+    el.style.top  = (k.y / 360 * 100) + '%';
+    sahne.appendChild(el);
+    emojiEl[k.id] = el;
+  }
+}
+
+/* ============================================================
+   6) UÇAN KLON ANİMASYONU
+   — kaynak emoji klonlanır, hedef yuvaya doğru eğri çizerek uçar
+   ============================================================ */
+async function ucur(kaynakId, hedefEl){
+  const kaynak = emojiEl[kaynakId];
+  if (!kaynak || !hedefEl) return;
+
+  nabiz(kaynakId);
+
+  const kRect = kaynak.getBoundingClientRect();
+  const hRect = hedefEl.getBoundingClientRect();
+
+  // Klon
+  const klon = document.createElement('div');
+  klon.className = 'ucan';
+  klon.textContent = kaynak.textContent;
+  klon.style.left = kRect.left + 'px';
+  klon.style.top  = kRect.top  + 'px';
+  klon.style.fontSize = kRect.height + 'px';
+  document.body.appendChild(klon);
+  aktifKlonlar.add(klon);
+
+  // Klonun doğal kutusunu ölç
+  const cRect = klon.getBoundingClientRect();
+
+  // Merkezler arası vektör
+  const basCx = kRect.left + kRect.width / 2;
+  const basCy = kRect.top  + kRect.height / 2;
+  const hedCx = hRect.left + hRect.width / 2;
+  const hedCy = hRect.top  + hRect.height / 2;
+
+  const dx = hedCx - basCx;
+  const dy = hedCy - basCy;
+
+  // Hedef boyuta göre ölçek
+  const olcek = hRect.width / cRect.width;
+
+  // Yay için ara kontrol noktası
+  const ortaX = dx * 0.55;
+  const ortaY = dy * 0.35 - 40;
+
+  const anim = klon.animate([
+    { transform: 'translate(0,0) scale(1)', opacity: 1 },
+    { transform: `translate(${ortaX}px, ${ortaY}px) scale(${1 + (olcek - 1) * 0.55})`,
+      opacity: 1, offset: 0.5 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${olcek})`, opacity: 1 }
+  ], {
+    duration: 620 / HIZ,
+    easing: 'cubic-bezier(.35,.7,.3,1)'
+  });
+
+  try { await anim.finished; } catch(_){}
+  klon.remove();
+  aktifKlonlar.delete(klon);
+}
+
+/* ============================================================
+   7) KART OLUŞTUR
+   ============================================================ */
+function kartOlustur(es){
+  const kart = document.createElement('div');
+  const tamEslesme = es.sol && es.sag;
+  kart.className = 'eslesme' + (tamEslesme ? '' : ' eslesmez');
+
+  // Sol yuva
+  const solYuva = document.createElement('span');
+  if (es.sol){
+    solYuva.className = 'hedef-emoji';
+    solYuva.textContent = es.sol.emoji;
+  } else {
+    solYuva.className = 'bos-kutu';
+    solYuva.textContent = 'NULL';
+  }
+
+  // Sağ yuva
+  const sagYuva = document.createElement('span');
+  if (es.sag){
+    sagYuva.className = 'hedef-emoji';
+    sagYuva.textContent = es.sag.emoji;
+  } else {
+    sagYuva.className = 'bos-kutu';
+    sagYuva.textContent = 'NULL';
+  }
+
+  // Bağlayıcı
+  const bag = document.createElement('span');
+  bag.className = 'bag';
+  bag.textContent = tamEslesme ? '≡' : '⊃';
+
+  kart.appendChild(solYuva);
+  kart.appendChild(bag);
+  kart.appendChild(sagYuva);
+
+  return { kart, solYuva, sagYuva };
+}
+
+/* ============================================================
+   8) AÇIKLAMALAR
+   ============================================================ */
+const ACIKLAMA = {
+  INNER: 'Yalnızca <b>iki kümede de bulunan</b> emojiler sonuca çekilir.',
+  LEFT:  'Sol kümenin <b>tüm üyeleri</b> gelir; karşılığı yoksa sağ taraf <b>NULL</b> olur.',
+  RIGHT: 'Sağ kümenin <b>tüm üyeleri</b> gelir; karşılığı yoksa sol taraf <b>NULL</b> olur.',
+  FULL:  'Her iki kümenin <b>tüm üyeleri</b> gelir; eşleşmeyenler NULL ile doldurulur.',
+  CROSS: 'Her sol üye <b>her sağ üyeyle</b> eşleşir — filtre yok, kartezyen çarpım.',
+};
+
+/* ============================================================
+   9) SIFIRLAMA
+   ============================================================ */
+function sahneyiSifirla(){
+  for (const el of Object.values(emojiEl)){
+    el.classList.remove('soluk', 'nabiz');
+    el.style.opacity = '1';
+  }
+  daireSol.classList.remove('parlak');
+  daireSag.classList.remove('parlak');
+}
+function sonucuSifirla(){
+  sonucAlan.querySelectorAll('.eslesme').forEach(e => e.remove());
+  bosMesaj.style.display = 'grid';
+  sayacEl.innerHTML = '<b>0</b> eşleşme';
+}
+function kalanKlonlariTemizle(){
+  for (const k of aktifKlonlar){
+    k.remove();
+  }
+  aktifKlonlar.clear();
+}
+
+/* ============================================================
+   10) ANA AKIŞ
+   ============================================================ */
+async function calistir(tip){
+  if (calisiyor){ iptal = true; await bekle(220); }
+  calisiyor = true;
+  iptal = false;
+
+  kalanKlonlariTemizle();
+  sahneyiSifirla();
+  sonucuSifirla();
+
+  // Küme dairelerini parlat
+  daireSol.classList.add('parlak');
+  daireSag.classList.add('parlak');
+
+  const liste = eslesmeleriUret(tip);
+
+  // Kullanılanları belirle (soluklaştırma için)
+  const kullanilanSol = new Set();
+  const kullanilanSag = new Set();
+  for (const e of liste){
+    if (e.sol) kullanilanSol.add(e.sol.id);
+    if (e.sag) kullanilanSag.add(e.sag.id);
+  }
+
+  durumYaz(ACIKLAMA[tip] + ' <b>Başlıyor…</b>');
+  await ayarliBekle(450);
+
+  let sayi = 0;
+
+  for (const es of liste){
+    if (iptal) break;
+
+    // Kartı oluştur ve sonuç alanına ekle
+    const { kart, solYuva, sagYuva } = kartOlustur(es);
+    sonucAlan.appendChild(kart);
+    bosMesaj.style.display = 'none';
+
+    // Hedef yuvalarının konumunu ölç (kart DOM'a eklendikten sonra)
+    const gorevler = [];
+    if (es.sol){
+      gorevler.push(
+        ucur(es.sol.id, solYuva).then(() => {
+          solYuva.classList.add('gorunur');
+        })
+      );
+    }
+    if (es.sag){
+      gorevler.push(
+        ucur(es.sag.id, sagYuva).then(() => {
+          sagYuva.classList.add('gorunur');
+        })
+      );
+    }
+
+    await Promise.all(gorevler);
+    if (iptal) break;
+
+    sayi++;
+    sayacEl.innerHTML = `<b>${sayi}</b> eşleşme`;
+
+    await ayarliBekle(tip === 'CROSS' ? 80 : 130);
+  }
+
+  if (iptal){ calisiyor = false; return; }
+
+  // Kullanılmayanları soluklaştır
+  for (const k of SOL_KUME){
+    if (!kullanilanSol.has(k.id) && emojiEl[k.id]){
+      emojiEl[k.id].classList.add('soluk');
+    }
+  }
+  for (const k of SAG_KUME){
+    if (!kullanilanSag.has(k.id) && emojiEl[k.id]){
+      emojiEl[k.id].classList.add('soluk');
+    }
+  }
+
+  await ayarliBekle(280);
+
+  const ek = tip !== 'CROSS'
+    ? ` <span style="opacity:.7">(${liste.filter(e => e.sol && e.sag).length} gerçek eşleşme)</span>`
+    : '';
+  durumYaz(ACIKLAMA[tip] + ` <b>${sayi} sonuç</b> üretildi.${ek}`);
+  setTimeout(durumGizle, 4200);
+
+  calisiyor = false;
+}
+
+/* ============================================================
+   11) OLAYLAR
+   ============================================================ */
+secici.addEventListener('click', e => {
+  const b = e.target.closest('button[data-join]');
+  if (!b) return;
+  secici.querySelectorAll('button').forEach(x => x.classList.remove('aktif'));
+  b.classList.add('aktif');
+  calistir(b.dataset.join);
+});
+
+hizSecici.addEventListener('click', e => {
+  const b = e.target.closest('button[data-hiz]');
+  if (!b) return;
+  hizSecici.querySelectorAll('button').forEach(x => x.classList.remove('aktif'));
+  b.classList.add('aktif');
+  HIZ = parseFloat(b.dataset.hiz);
+});
+
+/* ============================================================
+   12) BAŞLAT
+   ============================================================ */
+function baslat(){
+  emojileriYerlestir();
+  // Sahne yeniden boyutlanırsa emoji konumları zaten % ile → otomatik ölçeklenir.
+  setTimeout(() => calistir('INNER'), 380);
+}
+
+window.addEventListener('load', baslat);
+</script>
+</body>
+</html>
